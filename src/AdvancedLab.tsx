@@ -1,3 +1,4 @@
+import type {LabSnapshot} from './tutorLab';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {ResponsiveContainer,LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,ReferenceLine} from 'recharts';
 import {LabBench} from './LabBench';
@@ -18,7 +19,7 @@ const content={
 };
 const fmt=(n:number)=>n.toLocaleString('ar',{maximumSignificantDigits:6});
 export function LabProgress(){const s=readStore();const modes=Object.keys(s.results) as LabMode[];return <div className="lab-progress"><strong>سجل المختبر: {modes.length} / ٣ تجارب</strong><span>{modes.length*30} نقطة مختبر</span>{modes.map(k=><span key={k} className="lab-badge">✦ {content[k].badge}</span>)}</div>}
-export default function AdvancedLab({mode,student}:{mode:LabMode;student:string}){
+export default function AdvancedLab({mode,student,onTutorState}:{mode:LabMode;student:string;onTutorState:(value:LabSnapshot | null)=>void}){
  const data=content[mode],initial=useMemo(()=>readStore(),[]),draft=initial.drafts[mode];
  const [config,setConfig]=useState<Config>(draft?.config||{...defaults});
  const [hypothesis,setHypothesis]=useState(draft?.hypothesis||''),[notes,setNotes]=useState(draft?.notes||''),[conclusion,setConclusion]=useState(draft?.conclusion||'');
@@ -40,6 +41,13 @@ export default function AdvancedLab({mode,student}:{mode:LabMode;student:string}
  const crossed=mode==='titrate'&&samples.some(s=>s.v<eq)&&samples.some(s=>s.v>=eq)&&samples.some(s=>s.v>eq);
  const expected=mode==='titrate'?'متعادل':phClass(ph);
  const ready=measured&&(mode!=='titrate'||crossed)&&hypothesis.trim().length>=8&&notes.trim().length>=8&&conclusion.trim().length>=8&&answer===expected;
+ const excessMol = result?.excessMol ?? 0;
+ const equation = saltEquation(config.acid, config.base);
+ useEffect(() => {
+   onTutorState({mode,valid,reachable,probe,run,measured,crossed,ready,ph,added,eq,
+     classification:phClass(ph),excessMol,equation,sample:config.sample,ac,bc,av,bv});
+ }, [onTutorState,mode,valid,reachable,probe,run,measured,crossed,ready,ph,added,eq,excessMol,equation,config.sample,ac,bc,av,bv]);
+ useEffect(() => () => onTutorState(null), [onTutorState]);
  const curve=useMemo(()=>{if(!valid||mode!=='titrate')return [];const volumes=new Set<number>([0,50,eq,...samples.map(s=>s.v)]);for(let i=0;i<=100;i++)volumes.add(i/2);for(const d of [-1,-.2,-.05,0,.05,.2,1])if(eq+d>=0&&eq+d<=50)volumes.add(eq+d);return [...volumes].filter(v=>v>=0&&v<=50).sort((a,b)=>a-b).map(v=>({v,ph:neutralize(ac,av,bc,v).ph,reading:samples.find(s=>Math.abs(s.v-v)<1e-7)?.ph}));},[ac,av,bc,valid,mode,eq,samples]);
  function sound(){if(muted)return;try{const ctx=audio.current||(audio.current=new AudioContext());void ctx.resume();const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.setValueAtTime(650,ctx.currentTime);o.frequency.exponentialRampToValueAtTime(240,ctx.currentTime+.12);g.gain.setValueAtTime(.035,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.15);o.start();o.stop(ctx.currentTime+.16)}catch{setMuted(true);setFeedback('الصوت غير متاح في هذا المتصفح؛ يمكنك متابعة التجربة.')}}
  function change(key:keyof Config,value:string){setConfig(c=>({...c,[key]:value}));setRun(false);setProbe(false);setAdded(0);setSamples([]);setAnswer('');setFeedback('تغير إعداد المحلول؛ أعد تنفيذ القياس أو الخلط.');}
